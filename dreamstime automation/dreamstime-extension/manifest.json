@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Dreamstime Auto Submit",
+  "version": "1.0",
+  "description": "Automatically submits unfinished files on Dreamstime with a single click.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.dreamstime.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Dreamstime Auto Submit"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.dreamstime.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}

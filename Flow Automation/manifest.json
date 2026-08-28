@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Google Flow Prompt Automator",
+  "version": "1.0",
+  "description": "Automates submitting multiple prompts to Google Flow sequentially.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Flow Automator"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/fx/tools/flow/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "clipboardWrite",
+    "clipboardRead",
+    "debugger"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js"],
+      "matches": ["https://labs.google/*"]
+    }
+  ]
+}
