@@ -63,7 +63,7 @@ async def run_autosubmit():
                 await submit_buttons[0].click()
                 
                 # সাবমিট হওয়ার পর পেজ রিলোড বা আপডেট হওয়ার জন্য অপেক্ষা
-                await page.wait_for_timeout(5000) 
+                await page.wait_for_timeout(15000) 
                 
             except Exception as e:
                 print(f"সাবমিট করার সময় একটি সমস্যা হয়েছে: {e}")

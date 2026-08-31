@@ -10,12 +10,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === "start_automation") {
     sendResponse({status: "started"});
     isAutomating = true;
-    startAutomation(request.prompts);
+    startAutomation(request.prompts, request.delay);
   } else if (request.action === "start_downloading") {
     sendResponse({status: "started"});
     isDownloading = true;
     downloadedSrcs = new Set();
-    startDownloading();
+    startDownloading(request.delay);
   } else if (request.action === "stop_all") {
     isAutomating = false;
     isDownloading = false;
@@ -65,7 +65,7 @@ function findSendButton(inputBox) {
 
 // ─── Prompt Automation ──────────────────────────────────────────────
 
-async function startAutomation(prompts) {
+async function startAutomation(prompts, delayMs) {
   for (let i = 0; i < prompts.length; i++) {
     if (!isAutomating) {
         console.log('[Flow Automator] Stopped by user.');
@@ -117,7 +117,7 @@ async function startAutomation(prompts) {
       break;
     }
 
-    let delay = 5000;
+    let delay = delayMs || 5000;
     console.log(`[Flow Automator] Waiting ${delay / 1000} seconds before next prompt...`);
     for (let wait = 0; wait < delay; wait += 500) {
         if (!isAutomating) return;
@@ -150,7 +150,7 @@ async function cdpClick(x, y) {
 
 let downloadedSrcs = new Set();
 
-async function startDownloading() {
+async function startDownloading(delayMs) {
     console.log('[Flow DL] === Starting 2K Auto Downloader ===');
     
     let imagesProcessed = 0;
@@ -269,7 +269,7 @@ async function startDownloading() {
                 console.log(`[Flow DL] ✓ Image #${imagesProcessed} queued for 2K download.`);
 
                 // Wait for upscaling to fully start before moving on
-                await sleep(2500);
+                await sleep(delayMs || 2500);
 
                 // Move mouse away gently — do NOT click, as clicking can cancel the upscaling
                 await cdpHover(10, 10);

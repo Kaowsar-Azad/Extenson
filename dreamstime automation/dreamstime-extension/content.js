@@ -122,7 +122,7 @@ function checkAndSubmit() {
           if (checkInterval) clearInterval(checkInterval);
           alert("Dreamstime Auto Submit: সব ফাইল সফলভাবে সাবমিট করা শেষ হয়েছে!");
         }
-      }, 5000);
+      }, 15000);
     }
     return;
   } else {

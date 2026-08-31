@@ -3,19 +3,53 @@
 <head>
   <style>
     body { width: 300px; padding: 10px; font-family: sans-serif; }
-    textarea { width: 100%; height: 150px; margin-bottom: 10px; resize: none; box-sizing: border-box; }
+    textarea { width: 100%; height: 120px; margin-bottom: 10px; resize: none; box-sizing: border-box; }
     button { width: 100%; padding: 10px; background: #1a73e8; color: white; border: none; cursor: pointer; border-radius: 4px; }
     button:hover { background: #1557b0; }
     #status { margin-top: 10px; font-size: 12px; color: #555; }
+    .settings { margin-bottom: 10px; background: #f1f3f4; padding: 10px; border-radius: 4px; }
+    .settings div { margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;}
+    .settings label { font-size: 12px; font-weight: bold; color: #333; }
+    .settings input { width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
   </style>
 </head>
 <body>
-  <h3>Flow Automator</h3>
-  <p>Paste prompts below (one per line):</p>
-  <textarea id="prompts" placeholder="Prompt 1&#10;Prompt 2&#10;..."></textarea>
+  <h3 style="margin-top: 0;">Flow Automator</h3>
+  
+  <div class="settings">
+    <div>
+      <label for="promptDelay">Prompt Delay (sec):</label>
+      <input type="number" id="promptDelay" value="5" min="1">
+    </div>
+    <div style="margin-bottom: 0;">
+      <label for="downloadDelay">Download Delay (sec):</label>
+      <input type="number" id="downloadDelay" value="2.5" step="0.5" min="0.5">
+    </div>
+  </div>
+
+  <div style="margin-bottom: 10px; font-size: 13px;">
+    <label><input type="radio" name="mode" value="multiple" checked> Multiple Prompts</label><br>
+    <label><input type="radio" name="mode" value="single"> Single Prompt (Repeat)</label>
+  </div>
+  
+  <div id="multipleMode">
+    <p style="font-size: 13px; margin: 0 0 5px 0;">Paste prompts below (one per line):</p>
+    <textarea id="prompts" placeholder="Prompt 1&#10;Prompt 2&#10;..."></textarea>
+  </div>
+
+  <div id="singleMode" style="display: none;">
+    <p style="font-size: 13px; margin: 0 0 5px 0;">Paste a single prompt:</p>
+    <textarea id="singlePrompt" style="height: 70px;" placeholder="Your prompt here..."></textarea>
+    <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+      <label style="font-size: 12px; font-weight: bold; color: #333;">Repeat Count:</label>
+      <input type="number" id="repeatCount" value="10" min="1" style="width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+    </div>
+  </div>
+  
   <button id="start">Start Automation</button>
   <button id="downloadAll" style="margin-top: 10px; background-color: #00e676; color: #1b5e20;">Download All 2K Images</button>
   <button id="stop" style="margin-top: 10px; background-color: #ff5252; color: white; display: none;">Stop</button>
+  
   <div id="status"></div>
   <script src="popup.js"></script>
 </body>
