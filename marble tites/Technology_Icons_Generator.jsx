@@ -1,328 +1,144 @@
 #target illustrator
 
-// ============================================================
-// TECHNOLOGY ICONS GENERATOR
-// Creates 12 Editable Stroke Tech Vectors via Pure Code
-// ============================================================
-
 function main() {
-    var doc = app.documents.add(DocumentColorSpace.CMYK, 800, 600);
+    var docWidth = 3200;
+    var docHeight = 1800;
+    var doc = app.documents.add(DocumentColorSpace.CMYK, docWidth, docHeight);
     doc.rulerOrigin = [0, 0];
     
-    var black = new CMYKColor(); black.cyan=0; black.magenta=0; black.yellow=0; black.black=100;
-    var white = new CMYKColor(); white.cyan=0; white.magenta=0; white.yellow=0; white.black=0;
-    
-    function applyStyle(path, fill) {
-        path.filled = fill;
-        if (fill) path.fillColor = white;
-        path.stroked = true;
-        path.strokeColor = black;
-        path.strokeWidth = 2.5; // Bold lines for icons
-        path.strokeCap = StrokeCap.ROUNDENDCAP;
-        path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+    function makeCMYK(c, m, y, k) { 
+        var clr = new CMYKColor(); 
+        clr.cyan = c; clr.magenta = m; clr.yellow = y; clr.black = k; 
+        return clr; 
     }
+    
+    var cDark = makeCMYK(100, 75, 15, 40);   // Primary Navy
+    var cAccent = makeCMYK(75, 10, 0, 0);     // Cyan Accent
+    var cWhite = makeCMYK(0, 0, 0, 0);        // Pure White
+    var strokeW = 4.5;
+    
+    function style(p, fC, sC, sW) {
+        if (fC) { p.filled = true; p.fillColor = fC; } else { p.filled = false; }
+        if (sC) { p.stroked = true; p.strokeColor = sC; p.strokeWidth = sW || strokeW; p.strokeCap = StrokeCap.ROUNDENDCAP; p.strokeJoin = StrokeJoin.ROUNDENDJOIN; } else { p.stroked = false; }
+    }
+    
+    function cr(g, cx, cy, w, h, f, s, sW) { var p = g.pathItems.rectangle(cy + h/2, cx - w/2, w, h); style(p, f, s, sW); return p; }
+    function crr(g, cx, cy, w, h, r, f, s, sW) { var p = g.pathItems.roundedRectangle(cy + h/2, cx - w/2, w, h, r, r); style(p, f, s, sW); return p; }
+    function cc(g, cx, cy, r, f, s, sW) { var p = g.pathItems.ellipse(cy + r, cx - r, r*2, r*2); style(p, f, s, sW); return p; }
+    function ce(g, cx, cy, rx, ry, f, s, sW) { var p = g.pathItems.ellipse(cy + ry, cx - rx, rx*2, ry*2); style(p, f, s, sW); return p; }
+    function cl(g, x1, y1, x2, y2, s, sW) { var p = g.pathItems.add(); p.setEntirePath([[x1, y1], [x2, y2]]); style(p, null, s, sW); return p; }
+    function cp(g, pts, closed, f, s, sW) { var p = g.pathItems.add(); p.setEntirePath(pts); p.closed = closed; style(p, f, s, sW); return p; }
 
-    function drawLine(g, x1, y1, x2, y2) {
-        var p = g.pathItems.add();
-        p.setEntirePath([[x1, y1], [x2, y2]]);
-        applyStyle(p, false);
-    }
+    var abRect = doc.artboards[0].artboardRect;
+    var abLeft = abRect[0], abTop = abRect[1], abRight = abRect[2], abBottom = abRect[3];
+    var abHeight = Math.abs(abTop - abBottom);
 
-    function drawCircle(g, cx, cy, r, fill) {
-        var p = g.pathItems.ellipse(cy+r, cx-r, r*2, r*2);
-        applyStyle(p, fill !== false); 
-        return p;
-    }
+    var gridW = 2400;
+    var sbX = abLeft + gridW;
+    var sbW = docWidth - gridW; // 800px
 
-    function drawRect(g, x, y, w, h, fill) {
-        var p = g.pathItems.rectangle(y, x, w, h);
-        applyStyle(p, fill !== false);
-        return p;
-    }
+    // --- SIDEBAR BANNER ---
+    var gSidebar = doc.groupItems.add();
+    cr(gSidebar, sbX + sbW/2, abTop - abHeight/2, sbW, abHeight, cDark, null);
+    
+    var heroY = abTop - 350;
+    crr(gSidebar, sbX + sbW/2, heroY, 260, 180, 20, cWhite, cAccent, 10);
+    cl(gSidebar, sbX + sbW/2 - 130, heroY - 40, sbX + sbW/2 + 130, heroY - 40, cDark, 8);
+    cp(gSidebar, [[sbX + sbW/2 - 30, heroY - 90], [sbX + sbW/2 + 30, heroY - 90], [sbX + sbW/2 + 45, heroY - 140], [sbX + sbW/2 - 45, heroY - 140]], true, cWhite, null);
+    crr(gSidebar, sbX + sbW/2, heroY - 140, 160, 15, 7.5, cWhite, null);
+    cc(gSidebar, sbX + sbW/2 + 60, heroY - 60, 40, cWhite, cDark, 10);
+    cl(gSidebar, sbX + sbW/2 + 88, heroY - 88, sbX + sbW/2 + 120, heroY - 120, cDark, 14);
 
-    function drawRoundedRect(g, x, y, w, h, r, fill) {
-        var p = g.pathItems.roundedRectangle(y, x, w, h, r, r);
-        applyStyle(p, fill !== false);
-        return p;
+    function t(g, str, cx, y, size, color, bold) {
+        var tf = g.textFrames.add();
+        tf.contents = str;
+        tf.textRange.characterAttributes.size = size;
+        try { tf.textRange.characterAttributes.textFont = app.textFonts.getByName(bold ? "Montserrat-Bold" : "Montserrat-Regular"); } 
+        catch(e) { try { tf.textRange.characterAttributes.textFont = app.textFonts.getByName("Arial-BoldMT"); } catch(e2) {} }
+        tf.textRange.characterAttributes.fillColor = color;
+        tf.left = cx - tf.width / 2;
+        tf.top = y;
+        return tf;
     }
     
-    function drawPoly(g, pts, closed, fill) {
-        var p = g.pathItems.add();
-        p.setEntirePath(pts);
-        p.closed = closed;
-        applyStyle(p, fill !== false);
-        return p;
-    }
+    t(gSidebar, "DIGITAL TECH", sbX + sbW/2, abTop - 600, 60, cWhite, true);
+    t(gSidebar, "& BUSINESS SEO", sbX + sbW/2, abTop - 680, 50, cAccent, true);
+    crr(gSidebar, sbX + sbW/2, abTop - 800, 300, 80, 15, cWhite, null);
+    t(gSidebar, "100 Icon Set", sbX + sbW/2, abTop - 775, 38, cDark, true);
+    t(gSidebar, "FULLY EDITABLE", sbX + sbW/2, abTop - 1000, 65, cWhite, true);
 
-    // ==========================================
-    // ICON BUILDERS (100x100 bounding box each)
-    // ==========================================
-    
-    // 1. Laptop
-    function iconLaptop(x, y) {
-        var g = doc.groupItems.add();
-        // Screen
-        drawRoundedRect(g, x+15, y-20, 70, 45, 4, true);
-        // Inner Screen
-        drawRect(g, x+20, y-25, 60, 35, false);
-        // Base
-        drawPoly(g, [[x+5, y-65], [x+95, y-65], [x+85, y-70], [x+15, y-70]], true, true);
-        // Trackpad
-        drawLine(g, x+40, y-65, x+60, y-65);
-    }
-    
-    // 2. Smartphone
-    function iconSmartphone(x, y) {
-        var g = doc.groupItems.add();
-        // Body
-        drawRoundedRect(g, x+25, y-10, 50, 80, 8, true);
-        // Screen
-        drawRect(g, x+30, y-20, 40, 60, false);
-        // Speaker / Notch
-        drawLine(g, x+42, y-15, x+58, y-15);
-        // Home Button
-        drawCircle(g, x+50, y-85, 3, false);
-    }
-    
-    // 3. Server / Database
-    function iconServer(x, y) {
-        var g = doc.groupItems.add();
-        // Top Rack
-        drawRoundedRect(g, x+20, y-20, 60, 18, 3, true);
-        drawCircle(g, x+30, y-29, 2, true); drawCircle(g, x+38, y-29, 2, true);
-        drawLine(g, x+55, y-29, x+70, y-29);
-        
-        // Mid Rack
-        drawRoundedRect(g, x+20, y-41, 60, 18, 3, true);
-        drawCircle(g, x+30, y-50, 2, true); drawCircle(g, x+38, y-50, 2, true);
-        drawLine(g, x+55, y-50, x+70, y-50);
-        
-        // Bottom Rack
-        drawRoundedRect(g, x+20, y-62, 60, 18, 3, true);
-        drawCircle(g, x+30, y-71, 2, true); drawCircle(g, x+38, y-71, 2, true);
-        drawLine(g, x+55, y-71, x+70, y-71);
-    }
-    
-    // 4. Cloud Computing
-    function iconCloud(x, y) {
-        var g = doc.groupItems.add();
-        // Base flat rounded rect
-        drawRoundedRect(g, x+20, y-45, 60, 25, 12, true);
-        // Cloud puffs
-        drawCircle(g, x+40, y-35, 15, true);
-        drawCircle(g, x+60, y-40, 18, true);
-        drawCircle(g, x+75, y-55, 12, true);
-        // Nodes / Data
-        drawLine(g, x+50, y-70, x+50, y-90);
-        drawLine(g, x+35, y-70, x+35, y-85);
-        drawLine(g, x+65, y-70, x+65, y-85);
-        drawCircle(g, x+50, y-90, 4, true);
-        drawCircle(g, x+35, y-85, 4, true);
-        drawCircle(g, x+65, y-85, 4, true);
-    }
-    
-    // 5. Wi-Fi Signal
-    function iconWifi(x, y) {
-        var g = doc.groupItems.add();
-        // Dot
-        drawCircle(g, x+50, y-75, 5, true);
-        // We will create the wifi waves using ellipses clipped by a mask
-        // Actually simpler: just math out the anchor points for an arc.
-        // Or simpler: Polygons that look like arcs!
-        // To keep it 100% pure script without complex bezier math:
-        // We will draw 3 full circles and cover the bottom parts with a white V-shape
-        drawCircle(g, x+50, y-75, 15, false);
-        drawCircle(g, x+50, y-75, 30, false);
-        drawCircle(g, x+50, y-75, 45, false);
-        
-        // White V overlay to hide bottom and sides (Creates the Wifi Wedge)
-        var mask = g.pathItems.add();
-        mask.setEntirePath([
-            [x+50, y-75],
-            [x-20, y+10],
-            [x-20, y-100],
-            [x+120, y-100],
-            [x+120, y+10]
-        ]);
-        mask.closed = true;
-        mask.filled = true; mask.fillColor = white;
-        mask.stroked = false;
-        
-        // Ensure dot is on top
-        drawCircle(g, x+50, y-75, 5, true);
-    }
-    
-    // 6. Processor / Microchip
-    function iconProcessor(x, y) {
-        var g = doc.groupItems.add();
-        
-        // Pins (drawn first so they are behind)
-        var px = [25, 35, 50, 65, 75];
-        for (var i=0; i<5; i++) {
-            drawLine(g, x+px[i], y-10, x+px[i], y-90); // Vertical
-            drawLine(g, x+10, y-px[i], x+90, y-px[i]); // Horizontal
-        }
-        
-        // Main chip body
-        drawRoundedRect(g, x+20, y-20, 60, 60, 5, true);
-        // Inner core
-        drawRect(g, x+35, y-35, 30, 30, false);
-        
-        // Circuit line
-        drawCircle(g, x+30, y-30, 2, true);
-    }
-    
-    // 7. Gear / Settings
-    function iconGear(x, y) {
-        var g = doc.groupItems.add();
-        var cx = x+50, cy = y-50;
-        
-        // Teeth
-        for(var i=0; i<8; i++) {
-            var angle = (i * 45) * (Math.PI/180);
-            var dist = 25;
-            var tx = cx + dist * Math.cos(angle);
-            var ty = cy + dist * Math.sin(angle);
-            
-            // Just draw small rectangles rotated (polygon representation)
-            var tw = 12, th = 12;
-            var pts = [
-                [tx - tw/2, ty - th/2], [tx + tw/2, ty - th/2],
-                [tx + tw/2, ty + th/2], [tx - tw/2, ty + th/2]
-            ];
-            // Rotate polygon
-            var rPts = [];
-            for(var p=0; p<4; p++) {
-                var dx = pts[p][0] - cx, dy = pts[p][1] - cy;
-                var rx = dx*Math.cos(angle) - dy*Math.sin(angle);
-                var ry = dx*Math.sin(angle) + dy*Math.cos(angle);
-                rPts.push([cx+rx, cy+ry]);
-            }
-            drawPoly(g, rPts, true, true);
-        }
-        // Main body
-        drawCircle(g, cx, cy, 20, true);
-        // Inner hole
-        var hole = drawCircle(g, cx, cy, 8, true);
-    }
-    
-    // 8. Smartwatch
-    function iconSmartwatch(x, y) {
-        var g = doc.groupItems.add();
-        // Straps
-        drawRect(g, x+35, y-10, 30, 80, true);
-        drawLine(g, x+35, y-25, x+65, y-25);
-        drawLine(g, x+35, y-75, x+65, y-75);
-        // Watch face
-        drawRoundedRect(g, x+25, y-25, 50, 50, 8, true);
-        // Screen
-        drawRect(g, x+32, y-32, 36, 36, false);
-        // Button
-        drawRect(g, x+75, y-45, 3, 10, true);
-    }
-    
-    // 9. Network / Nodes
-    function iconNetwork(x, y) {
-        var g = doc.groupItems.add();
-        var n1 = [x+50, y-20];
-        var n2 = [x+20, y-50];
-        var n3 = [x+80, y-45];
-        var n4 = [x+35, y-85];
-        var n5 = [x+75, y-80];
-        
-        drawLine(g, n1[0], n1[1], n2[0], n2[1]);
-        drawLine(g, n1[0], n1[1], n3[0], n3[1]);
-        drawLine(g, n2[0], n2[1], n4[0], n4[1]);
-        drawLine(g, n2[0], n2[1], n5[0], n5[1]);
-        drawLine(g, n3[0], n3[1], n5[0], n5[1]);
-        drawLine(g, n4[0], n4[1], n5[0], n5[1]);
-        
-        drawCircle(g, n1[0], n1[1], 8, true);
-        drawCircle(g, n2[0], n2[1], 8, true);
-        drawCircle(g, n3[0], n3[1], 8, true);
-        drawCircle(g, n4[0], n4[1], 8, true);
-        drawCircle(g, n5[0], n5[1], 8, true);
-    }
-    
-    // 10. Shield (Cybersecurity)
-    function iconShield(x, y) {
-        var g = doc.groupItems.add();
-        drawPoly(g, [
-            [x+20, y-20],
-            [x+80, y-20],
-            [x+80, y-50],
-            [x+50, y-90],
-            [x+20, y-50]
-        ], true, true);
-        
-        // Inner checkmark
-        drawPoly(g, [
-            [x+35, y-45],
-            [x+45, y-55],
-            [x+65, y-35]
-        ], false, false);
-    }
-    
-    // 11. Battery
-    function iconBattery(x, y) {
-        var g = doc.groupItems.add();
-        // Body
-        drawRoundedRect(g, x+15, y-35, 65, 35, 4, true);
-        // Tip
-        drawRoundedRect(g, x+80, y-45, 8, 15, 2, true);
-        // Power Bars
-        drawRect(g, x+25, y-43, 10, 19, false);
-        drawRect(g, x+40, y-43, 10, 19, false);
-        drawRect(g, x+55, y-43, 10, 19, false);
-    }
-    
-    // 12. Gamepad / Controller
-    function iconGamepad(x, y) {
-        var g = doc.groupItems.add();
-        // Controller body (two overlapping rounded rects for wings)
-        drawRoundedRect(g, x+10, y-35, 40, 40, 20, true);
-        drawRoundedRect(g, x+50, y-35, 40, 40, 20, true);
-        // Middle bridge
-        drawRect(g, x+30, y-40, 40, 30, true);
-        // Left D-Pad (Cross)
-        var dx = x+30, dy = y-55;
-        drawPoly(g, [
-            [dx-2, dy+6], [dx+2, dy+6], [dx+2, dy+2], [dx+6, dy+2], [dx+6, dy-2],
-            [dx+2, dy-2], [dx+2, dy-6], [dx-2, dy-6], [dx-2, dy-2], [dx-6, dy-2],
-            [dx-6, dy+2], [dx-2, dy+2]
-        ], true, false);
-        
-        // Right Action Buttons
-        drawCircle(g, x+65, y-60, 3, false);
-        drawCircle(g, x+75, y-50, 3, false);
-    }
-    
-    // ==========================================
-    // GRID LAYOUT RUNNER
-    // ==========================================
-    var icons = [
-        iconLaptop, iconSmartphone, iconServer, iconCloud,
-        iconWifi, iconProcessor, iconGear, iconSmartwatch,
-        iconNetwork, iconShield, iconBattery, iconGamepad
+    // --- PROCEDURAL ICONS GENERATOR ---
+    var bases = [
+        // 0: Screen
+        function(g, x, y) { crr(g, x, y+5, 64, 44, 4, cWhite, cDark); cl(g, x, y-17, x, y-25, cDark); cl(g, x-15, y-25, x+15, y-25, cDark); },
+        // 1: Cloud
+        function(g, x, y) { cc(g, x, y+5, 20, cWhite, cDark); cc(g, x-15, y-2, 12, cWhite, cDark); cc(g, x+15, y-2, 12, cWhite, cDark); cr(g, x, y-7, 30, 14, cWhite, null); cl(g, x-27, y-14, x+27, y-14, cDark); },
+        // 2: Shield
+        function(g, x, y) { cp(g, [[x, y+24], [x+20, y+10], [x+20, y-5], [x, y-24], [x-20, y-5], [x-20, y+10]], true, cWhite, cDark); },
+        // 3: Document
+        function(g, x, y) { cp(g, [[x-18, y+26], [x+6, y+26], [x+18, y+14], [x+18, y-26], [x-18, y-26]], true, cWhite, cDark); cp(g, [[x+6, y+26], [x+6, y+14], [x+18, y+14]], true, cWhite, cDark); },
+        // 4: Folder
+        function(g, x, y) { cp(g, [[x-24, y+18], [x-6, y+18], [x, y+10], [x+24, y+10], [x+24, y-20], [x-24, y-20]], true, cWhite, cDark); },
+        // 5: Mobile
+        function(g, x, y) { crr(g, x, y, 36, 60, 6, cWhite, cDark); cc(g, x, y-20, 3, cDark, null); cl(g, x-6, y+22, x+6, y+22, cDark); },
+        // 6: Server
+        function(g, x, y) { crr(g, x, y+18, 50, 16, 3, cWhite, cDark); crr(g, x, y, 50, 16, 3, cWhite, cDark); crr(g, x, y-18, 50, 16, 3, cWhite, cDark); cc(g, x-15, y+18, 2, cDark, null); cc(g, x-15, y, 2, cDark, null); cc(g, x-15, y-18, 2, cDark, null); },
+        // 7: Gear
+        function(g, x, y) { cc(g, x, y, 22, cWhite, cDark); cc(g, x, y, 8, cWhite, cDark); cl(g, x, y+22, x, y+28, cDark); cl(g, x, y-22, x, y-28, cDark); cl(g, x+22, y, x+28, y, cDark); cl(g, x-22, y, x-28, y, cDark); cl(g, x+16, y+16, x+20, y+20, cDark); cl(g, x-16, y-16, x-20, y-20, cDark); cl(g, x+16, y-16, x+20, y-20, cDark); cl(g, x-16, y+16, x-20, y+20, cDark); },
+        // 8: Globe
+        function(g, x, y) { cc(g, x, y, 24, cWhite, cDark); ce(g, x, y, 10, 24, null, cDark); cl(g, x-24, y, x+24, y, cDark); },
+        // 9: Node / Network
+        function(g, x, y) { cc(g, x, y+12, 8, cWhite, cDark); cc(g, x-16, y-12, 8, cWhite, cDark); cc(g, x+16, y-12, 8, cWhite, cDark); cl(g, x-5, y+8, x-12, y-6, cDark); cl(g, x+5, y+8, x+12, y-6, cDark); cl(g, x-8, y-12, x+8, y-12, cDark); }
     ];
-    var rect = doc.artboards[0].artboardRect;
-    var startX = rect[0] + 100;
-    var startY = rect[1] - 100;
-    var spacingX = 150;
-    var spacingY = 150;
-    var cols = 4;
-    
-    for (var i = 0; i < icons.length; i++) {
-        var row = Math.floor(i / cols);
-        var col = i % cols;
-        var x = startX + col * spacingX;
-        var y = startY - row * spacingY;
+
+    var mods = [
+        // 0: Search (Magnifier)
+        function(g, x, y) { cc(g, x+14, y-14, 10, cWhite, cAccent); cl(g, x+21, y-21, x+28, y-28, cAccent, 6); },
+        // 1: Security (Padlock)
+        function(g, x, y) { crr(g, x+12, y-16, 16, 12, 2, cAccent, cDark); cp(g, [[x+8, y-10], [x+8, y-4], [x+16, y-4], [x+16, y-10]], false, null, cDark); },
+        // 2: Verified (Checkmark)
+        function(g, x, y) { cc(g, x+14, y-14, 12, cWhite, cAccent); cp(g, [[x+8, y-14], [x+12, y-18], [x+20, y-8]], false, null, cAccent); },
+        // 3: Alert (Warning)
+        function(g, x, y) { cp(g, [[x+14, y-4], [x+24, y-24], [x+4, y-24]], true, cWhite, cAccent); cl(g, x+14, y-12, x+14, y-18, cAccent); cc(g, x+14, y-21, 1, cAccent, null); },
+        // 4: Analytics (Chart)
+        function(g, x, y) { crr(g, x-8, y-8, 6, 16, 1, cAccent, null); crr(g, x, y-4, 6, 24, 1, cAccent, null); crr(g, x+8, y, 6, 32, 1, cAccent, null); },
+        // 5: Code (</>)
+        function(g, x, y) { cp(g, [[x-4, y+6], [x-10, y], [x-4, y-6]], false, null, cAccent); cp(g, [[x+4, y+6], [x+10, y], [x+4, y-6]], false, null, cAccent); cl(g, x+2, y+8, x-2, y-8, cAccent); },
+        // 6: Media (Play)
+        function(g, x, y) { cc(g, x, y, 16, cWhite, cAccent); cp(g, [[x-4, y+6], [x+6, y], [x-4, y-6]], true, cAccent, null); },
+        // 7: Sync (Arrows)
+        function(g, x, y) { cp(g, [[x-14, y], [x-14, y+10], [x+4, y+10]], false, null, cAccent); cp(g, [[x+14, y], [x+14, y-10], [x-4, y-10]], false, null, cAccent); cp(g, [[x, y+6], [x+6, y+10], [x, y+14]], true, cAccent, null); cp(g, [[x, y-6], [x-6, y-10], [x, y-14]], true, cAccent, null); },
+        // 8: Network (Wi-fi)
+        function(g, x, y) { cc(g, x, y-8, 3, cAccent, null); cp(g, [[x-8, y], [x, y+6], [x+8, y]], false, null, cAccent); cp(g, [[x-14, y+6], [x, y+16], [x+14, y+6]], false, null, cAccent); },
+        // 9: AI (Sparkles)
+        function(g, x, y) { cp(g, [[x+14, y-10], [x+18, y-18], [x+26, y-22], [x+18, y-26], [x+14, y-34], [x+10, y-26], [x+2, y-22], [x+10, y-18]], true, cAccent, null); cp(g, [[x+4, y-4], [x+6, y-8], [x+10, y-10], [x+6, y-12], [x+4, y-16], [x+2, y-12], [x-2, y-10], [x+2, y-8]], true, cAccent, null); }
+    ];
+
+    var baseNames = ["SCREEN", "CLOUD", "SECURITY", "DOCUMENT", "FOLDER", "MOBILE", "SERVER", "SYSTEM", "GLOBAL", "NETWORK"];
+    var modNames = ["SEARCH", "LOCK", "VERIFIED", "ALERT", "ANALYTICS", "CODE", "MEDIA", "SYNC", "WIFI", "AI"];
+
+    var cols = 10;
+    var rows = 10;
+    var cellW = gridW / cols;
+    var cellH = abHeight / rows;
+
+    for (var i = 0; i < 100; i++) {
+        var baseIdx = Math.floor(i / 10);
+        var modIdx = i % 10;
         
-        icons[i](x, y);
+        var cx = abLeft + modIdx * cellW + cellW / 2;
+        var cy = abTop - (baseIdx * cellH + cellH / 2) + 25;
+
+        var gIcon = doc.groupItems.add();
+        bases[baseIdx](gIcon, cx, cy);
+        mods[modIdx](gIcon, cx, cy);
+
+        var name = baseNames[baseIdx] + " " + modNames[modIdx];
+        t(gIcon, name, cx, cy - 55, 14, cDark, true);
     }
-    
+
     app.redraw();
-    alert("Technology Icons generated successfully!\nAll 12 icons are pure vectors with 2.5pt editable strokes.");
+    alert("100 Fully Procedural Vector Icons created successfully!\n\nThis script generated 10 base shapes multiplied by 10 modifiers to create 100 unique, original, and highly professional tech icons for Adobe Stock.");
 }
 
 main();

@@ -38,6 +38,11 @@ function showStartButtons() {
   document.getElementById('stop').style.display = 'none';
 }
 
+function isFlowUrl(url) {
+  if (!url) return false;
+  return url.includes('flow.google.com') || url.includes('labs.google/fx/tools/flow');
+}
+
 document.getElementById('start').addEventListener('click', async () => {
   const mode = document.querySelector('input[name="mode"]:checked').value;
   let prompts = [];
@@ -62,7 +67,7 @@ document.getElementById('start').addEventListener('click', async () => {
 
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     const activeTab = tabs[0];
-    if (activeTab && activeTab.url && activeTab.url.includes('labs.google/fx/tools/flow')) {
+    if (activeTab && isFlowUrl(activeTab.url)) {
       document.getElementById('status').innerText = 'Starting automation...';
       showStopButton();
       chrome.tabs.sendMessage(activeTab.id, {
@@ -86,7 +91,7 @@ document.getElementById('start').addEventListener('click', async () => {
 document.getElementById('downloadAll').addEventListener('click', async () => {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     const activeTab = tabs[0];
-    if (activeTab && activeTab.url && activeTab.url.includes('labs.google/fx/tools/flow')) {
+    if (activeTab && isFlowUrl(activeTab.url)) {
       document.getElementById('status').innerText = 'Starting 2K Downloader...';
       showStopButton();
       chrome.tabs.sendMessage(activeTab.id, {

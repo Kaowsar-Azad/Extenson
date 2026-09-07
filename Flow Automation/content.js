@@ -26,41 +26,109 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 // ─── Prompt Automation helpers ───────────────────────────────────────
 
 function findInputBox() {
-  return document.querySelector('[data-slate-editor="true"]') ||
-         document.querySelector('div[role="textbox"][contenteditable="true"]');
+  // 1. Slate editor
+  let el = document.querySelector('[data-slate-editor="true"]');
+  if (el) return el;
+
+  // 2. Role textbox with contenteditable
+  el = document.querySelector('div[role="textbox"][contenteditable="true"]');
+  if (el) return el;
+
+  // 3. Search near placeholder "What do you want to create"
+  const allNodes = Array.from(document.querySelectorAll('*'));
+  const placeholderNode = allNodes.find(node => 
+    node.children.length === 0 && 
+    node.textContent && 
+    node.textContent.trim().toLowerCase().includes('what do you want to create')
+  );
+  if (placeholderNode) {
+    let p = placeholderNode.parentElement;
+    for (let i = 0; i < 6; i++) {
+      if (!p || p.tagName === 'BODY') break;
+      const target = p.querySelector('[contenteditable="true"], textarea, input[type="text"]');
+      if (target) return target;
+      p = p.parentElement;
+    }
+  }
+
+  // 4. Any visible contenteditable element (pick the bottommost one, where the prompt bar is)
+  const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'))
+    .filter(e => {
+      const r = e.getBoundingClientRect();
+      return r.width > 50 && r.height > 20;
+    });
+  if (editables.length > 0) {
+    editables.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+    return editables[0];
+  }
+
+  // 5. Any textarea
+  const textareas = Array.from(document.querySelectorAll('textarea'))
+    .filter(t => {
+      const r = t.getBoundingClientRect();
+      return r.width > 50 && r.height > 20;
+    });
+  if (textareas.length > 0) {
+    textareas.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+    return textareas[0];
+  }
+
+  return null;
+}
+
+function isSendButton(btn) {
+  if (!btn) return false;
+  const txt = (btn.textContent || '').trim().toLowerCase();
+  const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+  
+  if (txt.includes('arrow_forward') || txt.includes('arrow_upward') || txt.includes('send') || txt.includes('north')) return true;
+  if (label.includes('send') || label.includes('create') || label.includes('submit') || label.includes('generate')) return true;
+  
+  const icon = btn.querySelector('i, svg, span, [data-icon]');
+  if (icon) {
+    const iconTxt = (icon.textContent || '').trim().toLowerCase();
+    const iconLabel = (icon.getAttribute('aria-label') || '').toLowerCase();
+    if (iconTxt.includes('arrow_forward') || iconTxt.includes('arrow_upward') || iconTxt.includes('send') || iconTxt.includes('north')) return true;
+    if (iconLabel.includes('send') || iconLabel.includes('create') || iconLabel.includes('submit')) return true;
+  }
+  return false;
 }
 
 function findSendButton(inputBox) {
-    if (!inputBox) {
-        inputBox = document.querySelector('[data-slate-editor="true"]') ||
-                   document.querySelector('div[role="textbox"][contenteditable="true"]');
-    }
+  if (!inputBox) {
+    inputBox = findInputBox();
+  }
 
-    if (inputBox) {
-        let container = inputBox.parentElement;
-        for (let i = 0; i < 15; i++) {
-            if (!container || container.tagName === 'BODY') break;
-            let btns = Array.from(container.querySelectorAll('button, [role="button"]'));
-            for (let btn of btns) {
-                if (btn.textContent && btn.textContent.includes('arrow_forward') && btn.textContent.includes('Create')) return btn;
-            }
-            if (btns.length >= 2) {
-               let lastBtn = btns[btns.length - 1];
-               if (lastBtn.textContent && lastBtn.textContent.includes('arrow_forward')) return lastBtn;
-            }
-            container = container.parentElement;
+  if (inputBox) {
+    let container = inputBox.parentElement;
+    for (let i = 0; i < 15; i++) {
+      if (!container || container.tagName === 'BODY') break;
+      let btns = Array.from(container.querySelectorAll('button, [role="button"]'))
+                     .filter(b => b.getBoundingClientRect().width > 0);
+      
+      for (let btn of btns) {
+        if (isSendButton(btn)) return btn;
+      }
+      
+      if (btns.length >= 2) {
+        let lastBtn = btns[btns.length - 1];
+        const r = lastBtn.getBoundingClientRect();
+        const ir = inputBox.getBoundingClientRect();
+        if (r.left > ir.left || r.right > ir.right) {
+          return lastBtn;
         }
+      }
+      container = container.parentElement;
     }
+  }
 
-    const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
-    const visibleBtns = allButtons.filter(b => b.getBoundingClientRect().width > 0);
-    for (const btn of visibleBtns) {
-        if (btn.textContent && btn.textContent.includes('arrow_forward') && btn.textContent.includes('Create')) return btn;
-    }
-    for (const btn of visibleBtns) {
-        if (btn.textContent && btn.textContent.includes('arrow_forward')) return btn;
-    }
-    return null;
+  const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'))
+                         .filter(b => b.getBoundingClientRect().width > 0);
+  for (const btn of allButtons) {
+    if (isSendButton(btn)) return btn;
+  }
+
+  return null;
 }
 
 // ─── Prompt Automation ──────────────────────────────────────────────
@@ -82,13 +150,19 @@ async function startAutomation(prompts, delayMs) {
 
     inputBox.click();
     inputBox.focus();
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    const range = document.createRange();
-    range.selectNodeContents(inputBox);
-    sel.addRange(range);
-    
-    document.execCommand('selectAll', false, null);
+    if (inputBox.tagName === 'TEXTAREA' || inputBox.tagName === 'INPUT') {
+      inputBox.select();
+      document.execCommand('delete', false, null);
+      inputBox.value = '';
+    } else {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(inputBox);
+      sel.addRange(range);
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+    }
     await new Promise(r => setTimeout(r, 100));
 
     console.log('[Flow Automator] Dispatching HARDWARE typing via CDP...');

@@ -1,12 +1,23 @@
+function attachDebugger(tabId, callback) {
+  chrome.debugger.attach({ tabId }, "1.3", () => {
+    const err = chrome.runtime.lastError;
+    if (err && !err.message.includes("Already attached")) {
+      console.error("[BG] attach error:", err.message);
+      callback(false, err.message);
+      return;
+    }
+    callback(true);
+  });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const tabId = sender.tab.id;
 
   // Pure mouse click — NO Enter key. Used for download automation.
   if (request.action === "simulate_click") {
-    chrome.debugger.attach({ tabId }, "1.3", () => {
-      if (chrome.runtime.lastError) {
-        console.error("[BG] attach error:", chrome.runtime.lastError.message);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+    attachDebugger(tabId, (ok, err) => {
+      if (!ok) {
+        sendResponse({ success: false, error: err });
         return;
       }
       chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
@@ -27,10 +38,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Mouse click + Enter key. Used ONLY for prompt submission.
   if (request.action === "simulate_click_enter") {
-    chrome.debugger.attach({ tabId }, "1.3", () => {
-      if (chrome.runtime.lastError) {
-        console.error("[BG] attach error:", chrome.runtime.lastError.message);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+    attachDebugger(tabId, (ok, err) => {
+      if (!ok) {
+        sendResponse({ success: false, error: err });
         return;
       }
       chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
@@ -59,10 +69,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Type text into focused element
   if (request.action === "simulate_type") {
-    chrome.debugger.attach({ tabId }, "1.3", () => {
-      if (chrome.runtime.lastError) {
-        console.error("[BG] attach error:", chrome.runtime.lastError.message);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+    attachDebugger(tabId, (ok, err) => {
+      if (!ok) {
+        sendResponse({ success: false, error: err });
         return;
       }
       chrome.debugger.sendCommand({ tabId }, "Input.insertText", {
@@ -77,10 +86,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Mouse hover (move)
   if (request.action === "simulate_hover") {
-    chrome.debugger.attach({ tabId }, "1.3", () => {
-      if (chrome.runtime.lastError) {
-        console.error("[BG] attach error:", chrome.runtime.lastError.message);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+    attachDebugger(tabId, (ok, err) => {
+      if (!ok) {
+        sendResponse({ success: false, error: err });
         return;
       }
       chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {

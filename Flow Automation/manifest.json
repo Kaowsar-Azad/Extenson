@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Google Flow Prompt Automator",
-  "version": "1.0",
-  "description": "Automates submitting multiple prompts to Google Flow sequentially.",
+  "version": "1.1",
+  "description": "Automates submitting multiple prompts and downloading 2K images on Google Flow.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Flow Automator"
   },
   "content_scripts": [
     {
-      "matches": ["https://labs.google/fx/tools/flow/*"],
+      "matches": [
+        "https://labs.google/fx/tools/flow/*",
+        "https://*.labs.google/fx/tools/flow/*",
+        "https://flow.google.com/*",
+        "https://*.flow.google.com/*"
+      ],
       "js": ["content.js"]
     }
   ],
@@ -20,13 +25,25 @@
     "clipboardRead",
     "debugger"
   ],
+  "host_permissions": [
+    "https://labs.google/*",
+    "https://*.labs.google/*",
+    "https://flow.google.com/*",
+    "https://*.flow.google.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {
       "resources": ["inject.js"],
-      "matches": ["https://labs.google/*"]
+      "matches": [
+        "https://labs.google/*",
+        "https://*.labs.google/*",
+        "https://flow.google.com/*",
+        "https://*.flow.google.com/*"
+      ]
     }
   ]
 }
+

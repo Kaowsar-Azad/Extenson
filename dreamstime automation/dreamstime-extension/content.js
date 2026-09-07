@@ -29,7 +29,7 @@ function updateStatusIndicator() {
     indicator.style.pointerEvents = 'none'; // Make sure it doesn't block clicks
     document.body.appendChild(indicator);
   }
-  
+
   if (isRunning) {
     indicator.textContent = 'Dreamstime Auto Submit: RUNNING';
     indicator.style.backgroundColor = '#28a745';
@@ -77,24 +77,24 @@ function resetState() {
 }
 
 function startSubmitting() {
-    if (!isRunning) return;
-    
+  if (!isRunning) return;
+
+  checkAndSubmit();
+
+  // Check very frequently (every 1 second) to be extremely responsive
+  if (checkInterval) clearInterval(checkInterval);
+  checkInterval = setInterval(() => {
+    if (!isRunning) {
+      clearInterval(checkInterval);
+      return;
+    }
     checkAndSubmit();
-    
-    // Check very frequently (every 1 second) to be extremely responsive
-    if (checkInterval) clearInterval(checkInterval);
-    checkInterval = setInterval(() => {
-        if (!isRunning) {
-            clearInterval(checkInterval);
-            return;
-        }
-        checkAndSubmit();
-    }, 1000); 
+  }, 1000);
 }
 
 function findSubmitButton() {
   const allInputs = document.querySelectorAll('input[type="submit"], button, input[type="button"], a');
-  
+
   const submitButtons = Array.from(allInputs).filter(el => {
     if (el.id === 'dreamstime-auto-submit-indicator') return false;
 
@@ -102,7 +102,7 @@ function findSubmitButton() {
     const inNav = el.closest('nav') || el.closest('header');
     return text.includes("submit") && !inNav;
   });
-  
+
   return submitButtons.length > 0 ? submitButtons[0] : null;
 }
 
@@ -154,11 +154,11 @@ function checkAndSubmit() {
     }
 
     // 3 seconds have passed since "Submitting image" appeared
-    if (Date.now() - submittingDetectedTime >= 3000) {
+    if (Date.now() - submittingDetectedTime >= 1000) {
       // Click every 2 seconds to force it through
       if (Date.now() - lastActionTime > 2000) {
         lastActionTime = Date.now();
-        try { btn.click(); } catch (e) {}
+        try { btn.click(); } catch (e) { }
       }
     }
     return;
@@ -168,6 +168,6 @@ function checkAndSubmit() {
   if (!firstClickDone || Date.now() - lastActionTime > 2000) {
     firstClickDone = true;
     lastActionTime = Date.now();
-    try { btn.click(); } catch (e) {}
+    try { btn.click(); } catch (e) { }
   }
 }
