@@ -5,31 +5,6 @@ import datetime
 # pyrefly: ignore [missing-import]
 from playwright.async_api import async_playwright
 
-def get_dreamstime_page(context):
-    """Find the tab with Dreamstime edit page, or any Dreamstime tab."""
-    for page in context.pages:
-        try:
-            u = page.url
-            if u and "dreamstime.com/upload/edit" in u:
-                return page
-        except Exception:
-            pass
-    for page in context.pages:
-        try:
-            u = page.url
-            if u and "dreamstime.com" in u:
-                return page
-        except Exception:
-            pass
-    for page in context.pages:
-        try:
-            u = page.url
-            if u and not u.startswith("chrome://"):
-                return page
-        except Exception:
-            pass
-    return context.pages[0] if context.pages else None
-
 def extract_file_id(url: str):
     """Extract file ID from Dreamstime edit URL, e.g. /upload/edit474928681 -> 474928681"""
     if not url:
@@ -42,35 +17,35 @@ def extract_file_id(url: str):
         return match.group(1)
     return None
 
-CHECK_AND_CLICK_JS = '''() => {
-    // 1. Check if submission is actively in progress
-    const bodyText = document.body.innerText.toLowerCase();
-    const isVerifying = bodyText.includes("verifying data for submission");
-    const isSubmitting = bodyText.includes("submitting image");
-    const progressEl = document.querySelector('.popup__progress, .form-submitting, .loading-spinner');
-    
-    if (isVerifying || isSubmitting || (progressEl && progressEl.offsetParent !== null)) {
-        return { status: "in_progress", message: "Dreamstime is processing submission..." };
+CHECK_AND_SUBMIT_JS = '''() => {
+    // 1. Check if Dreamstime is actively loading the next image via its AJAX loader
+    const ml = document.getElementById('js-mainloader');
+    if (ml && ml.dataset.state === 'loading') {
+        return { status: "loading", message: "Loading next image..." };
     }
 
-    // 2. Check for visible form validation errors on the page
-    const errorEls = Array.from(document.querySelectorAll('.error-message, .form-error, .alert-danger, [class*="form-message--error"]'))
-                         .filter(el => el.offsetParent !== null && el.innerText.trim());
-    if (errorEls.length > 0) {
-        const errText = errorEls.map(e => e.innerText.trim()).join(' | ');
-        return { status: "error", message: errText };
+    // 2. Check if actively verifying data or submitting image
+    const sm = document.querySelector('#js-submit-message p');
+    if (sm && sm.innerText.trim()) {
+        return { status: "submitting", message: sm.innerText.trim() };
     }
 
-    // 3. Locate the real submit button
+    // 3. Check for submission failure / validation error messages
+    const sf = document.querySelector('#js-submit-message-fail p');
+    if (sf && sf.innerText.trim()) {
+        return { status: "error", message: sf.innerText.trim() };
+    }
+
+    // 4. Find the real submit button
     let btn = document.getElementById('submitbutton');
     if (!btn) {
+        // Fallback for custom or varied submit buttons
         const candidates = document.querySelectorAll('a.btn, button, input[type="submit"]');
         for (const el of candidates) {
             if (el.disabled) continue;
             if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) continue;
-            if (el.closest('nav') || el.closest('header') || el.closest('.header') || el.closest('#header')) continue;
-
-            const text = (el.value || el.innerText || "").trim().toLowerCase();
+            if (el.closest('nav') || el.closest('header')) continue;
+            const text = (el.value || el.innerText || el.textContent || "").trim().toLowerCase();
             if (text.includes("submit") && !text.includes("files")) {
                 btn = el;
                 break;
@@ -78,14 +53,9 @@ CHECK_AND_CLICK_JS = '''() => {
         }
     }
 
-    if (btn) {
-        // Single, clean, gentle click - exactly like a human click
-        try {
-            btn.scrollIntoView({ behavior: 'auto', block: 'center' });
-        } catch (e) {}
+    if (btn && btn.offsetParent !== null && !btn.disabled) {
         btn.click();
-        
-        const btnText = (btn.value || btn.innerText || "").trim() || "Submit commercial";
+        const btnText = (btn.value || btn.innerText || btn.textContent || "").trim() || "Submit";
         return { status: "clicked", text: btnText };
     }
 
@@ -102,111 +72,134 @@ async def run_autosubmit():
         try:
             browser = await p.chromium.connect_over_cdp("http://localhost:9222")
             context = browser.contexts[0]
-            
-            if not context.pages:
-                print("No open tabs found in Chrome.")
-                return
-                
             print("Connected successfully!")
-            print("Monitoring Dreamstime upload pages...\n")
+            print("Monitoring Dreamstime upload tabs...\n")
         except Exception as e:
             print(f"Failed to connect: {e}")
             print("Make sure Chrome was started with: --remote-debugging-port=9222")
             return
 
-        current_file_id = None
-        last_click_time = 0.0
-        click_attempts = 0
-        confirmed_submitted_count = 0
-        last_status_display = ""
+        page_states = {}
+        total_confirmed_submitted = 0
+        last_global_status = ""
 
         while True:
-            # Gentle, realistic 0.5s polling to avoid freezing the browser thread
             await asyncio.sleep(0.5)
-            
+
             try:
-                page = get_dreamstime_page(context)
-                if not page:
+                active_dreamstime_pages = []
+                for page in context.pages:
+                    try:
+                        u = page.url
+                        if u and ("dreamstime.com/upload/edit" in u or "dreamstime.com/upload" in u):
+                            active_dreamstime_pages.append(page)
+                            if page not in page_states:
+                                page_states[page] = {
+                                    "current_file_id": None,
+                                    "clicked": False,
+                                    "last_action_time": 0.0,
+                                    "attempts": 0
+                                }
+                    except Exception:
+                        pass
+
+                closed_pages = [p for p in page_states if p not in context.pages]
+                for p in closed_pages:
+                    del page_states[p]
+
+                if not active_dreamstime_pages:
+                    status = "Waiting for Dreamstime upload page to open..."
+                    if status != last_global_status:
+                        print(f"{status:<65}", end="\r", flush=True)
+                        last_global_status = status
                     continue
 
-                url = page.url
-                file_id = extract_file_id(url)
+                for page in active_dreamstime_pages:
+                    state = page_states[page]
 
-                if file_id:
+                    try:
+                        url = page.url
+                    except Exception:
+                        continue
+
+                    file_id = extract_file_id(url)
                     now = time.time()
 
-                    # DETECT REAL SUBMISSION: ID changed!
-                    if file_id != current_file_id:
-                        if current_file_id is not None:
-                            # Only confirm submission when the ID actually changed from a previous ID
-                            confirmed_submitted_count += 1
-                            time_str = datetime.datetime.now().strftime("%H:%M:%S")
-                            print(f"[{time_str}] [ID: {current_file_id}] Successfully submitted! (Confirmed Total: {confirmed_submitted_count})")
-                        
-                        current_file_id = file_id
-                        last_click_time = 0.0
-                        click_attempts = 0
-
-                    # Decide if click is needed:
-                    # - If never clicked for this ID (last_click_time == 0)
-                    # - OR if 6 seconds have passed without redirect and without progress (Gentle Retry)
-                    should_click = (last_click_time == 0.0) or (now - last_click_time >= 6.0)
-
-                    if should_click:
-                        try:
-                            result = await page.evaluate(CHECK_AND_CLICK_JS)
-                        except Exception:
-                            # Page is in mid-navigation/reloading
-                            await asyncio.sleep(0.5)
-                            continue
-
-                        if result:
-                            res_status = result.get("status")
-
-                            if res_status == "in_progress":
-                                # Server is actively saving/verifying, wait gently
-                                last_click_time = now
-                                status = f"[{file_id}] Server is processing submission... Please wait."
-                                if status != last_status_display:
-                                    print(f"{status:<65}", end="\r", flush=True)
-                                    last_status_display = status
-
-                            elif res_status == "error":
-                                # Form has real validation errors!
-                                err_msg = result.get("message", "Validation error")
-                                print(f"\n[Warning] [ID: {file_id}] Error on form: {err_msg}")
-                                print(f"[{file_id}] Please check or fix the field in browser. Pausing 5s...")
-                                await asyncio.sleep(5.0)
-
-                            elif res_status == "clicked":
-                                click_attempts += 1
-                                last_click_time = now
+                    if file_id:
+                        # New ID arrived on this page!
+                        if file_id != state["current_file_id"]:
+                            # If we previously clicked submit for the old ID and the ID has now changed, that's a verified success!
+                            if state["current_file_id"] is not None and state["clicked"]:
+                                total_confirmed_submitted += 1
                                 time_str = datetime.datetime.now().strftime("%H:%M:%S")
-                                btn_name = result.get("text", "Submit")
+                                print(f"\n[{time_str}] [ID: {state['current_file_id']}] Successfully submitted! (Confirmed Total: {total_confirmed_submitted})")
 
-                                if click_attempts == 1:
-                                    print(f"[{time_str}] [ID: {file_id}] Clicked '{btn_name}'. Waiting for server confirmation...")
-                                else:
-                                    print(f"[{time_str}] [ID: {file_id}] Still on page. Gently retrying click (Attempt {click_attempts})...", end="\r", flush=True)
+                            state["current_file_id"] = file_id
+                            state["clicked"] = False
+                            state["last_action_time"] = 0.0
+                            state["attempts"] = 0
+                            last_global_status = ""
 
-                                last_status_display = f"waiting_{file_id}"
+                        # Decide if we need to click or check status:
+                        # - Not clicked yet (state["clicked"] == False)
+                        # - OR 6 seconds elapsed since click and still on the same ID (auto-retry)
+                        should_act = (not state["clicked"]) or (now - state["last_action_time"] >= 6.0)
 
-                            else:
-                                status = f"[{file_id}] Waiting for Submit button to be ready..."
-                                if status != last_status_display:
-                                    print(f"{status:<65}", end="\r", flush=True)
-                                    last_status_display = status
-                else:
-                    # No edit<ID> in URL currently
-                    if url and "unfinished" in url.lower() and confirmed_submitted_count > 0:
-                        status = f"All files completed! (Confirmed submitted: {confirmed_submitted_count})"
+                        if should_act:
+                            try:
+                                result = await page.evaluate(CHECK_AND_SUBMIT_JS)
+                            except Exception:
+                                continue
+
+                            if result:
+                                res_status = result.get("status")
+
+                                if res_status == "clicked":
+                                    state["clicked"] = True
+                                    state["last_action_time"] = now
+                                    state["attempts"] += 1
+                                    time_str = datetime.datetime.now().strftime("%H:%M:%S")
+                                    btn_name = result.get("text", "Submit")
+
+                                    if state["attempts"] == 1:
+                                        print(f"\n[{time_str}] [ID: {file_id}] Clicked '{btn_name}'. Processing submission...")
+                                    else:
+                                        status = f"[{time_str}] [ID: {file_id}] Still on page. Retrying click (Attempt {state['attempts']})..."
+                                        if status != last_global_status:
+                                            print(f"{status:<65}", end="\r", flush=True)
+                                            last_global_status = status
+
+                                elif res_status in ("submitting", "loading"):
+                                    state["last_action_time"] = now
+                                    msg = result.get("message", "Processing...")
+                                    status = f"[{file_id}] {msg}"
+                                    if status != last_global_status:
+                                        print(f"{status:<65}", end="\r", flush=True)
+                                        last_global_status = status
+
+                                elif res_status == "error":
+                                    err_msg = result.get("message", "Validation error")
+                                    print(f"\n[Warning] [ID: {file_id}] Form Error: {err_msg}")
+                                    print(f"[{file_id}] Please resolve the issue in your browser. Pausing 8s...")
+                                    state["last_action_time"] = now + 4.0
+                                    last_global_status = ""
+
+                                else:  # no_button
+                                    state["last_action_time"] = now
+                                    status = f"[{file_id}] Waiting for Submit button..."
+                                    if status != last_global_status:
+                                        print(f"{status:<65}", end="\r", flush=True)
+                                        last_global_status = status
                     else:
-                        display_url = url[:45] if url else "loading..."
-                        status = f"Waiting for edit page... ({display_url})"
-                    
-                    if status != last_status_display:
-                        print(f"{status:<65}", end="\r", flush=True)
-                        last_status_display = status
+                        if "unfinished" in url.lower() and total_confirmed_submitted > 0:
+                            status = f"All files completed! (Confirmed Total: {total_confirmed_submitted})"
+                        else:
+                            display_url = url[:45] if url else "loading..."
+                            status = f"Waiting for edit page... ({display_url})"
+
+                        if status != last_global_status:
+                            print(f"{status:<65}", end="\r", flush=True)
+                            last_global_status = status
 
             except Exception as e:
                 err_str = str(e)
