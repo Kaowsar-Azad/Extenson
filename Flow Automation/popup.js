@@ -15,6 +15,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    if (tabs[0] && isFlowUrl(tabs[0].url)) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: "get_status" }, function(response) {
+        if (chrome.runtime.lastError) return;
+        if (response) {
+          if (response.isAutomating) {
+            showStopButton();
+            document.getElementById('status').innerText = `Automating... (${response.progress.current}/${response.progress.total})`;
+          } else if (response.isDownloading) {
+            showStopButton();
+            document.getElementById('status').innerText = 'Downloading images...';
+          }
+        }
+      });
+    }
+  });
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "update_status") {
+    document.getElementById('status').innerText = `Automating... (${request.current}/${request.total})`;
+  } else if (request.action === "automation_finished") {
+    document.getElementById('status').innerText = 'Automation finished.';
+    showStartButtons();
+  }
 });
 
 function saveSettings() {

@@ -5,6 +5,7 @@ scriptEl.src = chrome.runtime.getURL('inject.js');
 
 let isAutomating = false;
 let isDownloading = false;
+let automationProgress = { current: 0, total: 0 };
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === "start_automation") {
@@ -20,6 +21,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     isAutomating = false;
     isDownloading = false;
     sendResponse({status: "stopped"});
+  } else if (request.action === "get_status") {
+    sendResponse({ isAutomating, isDownloading, progress: automationProgress });
   }
 });
 
@@ -134,17 +137,33 @@ function findSendButton(inputBox) {
 // ─── Prompt Automation ──────────────────────────────────────────────
 
 async function startAutomation(prompts, delayMs) {
+  automationProgress.total = prompts.length;
+  automationProgress.current = 0;
+
   for (let i = 0; i < prompts.length; i++) {
     if (!isAutomating) {
         console.log('[Flow Automator] Stopped by user.');
         return;
     }
+    
+    automationProgress.current = i + 1;
+    chrome.runtime.sendMessage({ action: "update_status", current: i + 1, total: prompts.length }).catch(() => {});
+
     const prompt = prompts[i];
     console.log(`[Flow Automator] Processing prompt ${i + 1}/${prompts.length}: ${prompt}`);
     
-    const inputBox = findInputBox();
+    let inputBox = null;
+    for (let retry = 0; retry < 5; retry++) {
+        inputBox = findInputBox();
+        if (inputBox) break;
+        console.log('[Flow Automator] Input box not found, retrying...');
+        await new Promise(r => setTimeout(r, 2000));
+        if (!isAutomating) return;
+    }
+
     if (!inputBox) {
-      alert('Could not find the input box. Please make sure you are on Google Flow page.');
+      alert(`Could not find the input box. Stopped at prompt ${i + 1} of ${prompts.length}.`);
+      isAutomating = false;
       break;
     }
 
@@ -188,6 +207,8 @@ async function startAutomation(prompts, delayMs) {
       });
     } else {
       console.log("[Flow Automator] Could not find the Send button.");
+      alert(`Could not find the Send button. Stopped at prompt ${i + 1} of ${prompts.length}.`);
+      isAutomating = false;
       break;
     }
 
@@ -201,8 +222,9 @@ async function startAutomation(prompts, delayMs) {
 
   if (isAutomating) {
       console.log("[Flow Automator] Automation finished.");
-      alert("Flow Automation: All prompts have been sent!");
+      alert(`Flow Automation: All ${prompts.length} prompts have been sent!`);
       isAutomating = false;
+      chrome.runtime.sendMessage({ action: "automation_finished" }).catch(() => {});
   }
 }
 

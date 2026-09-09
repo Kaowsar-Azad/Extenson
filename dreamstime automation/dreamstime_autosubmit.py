@@ -36,7 +36,77 @@ CHECK_AND_SUBMIT_JS = '''() => {
         return { status: "error", message: sf.innerText.trim() };
     }
 
-    // 4. Find the real submit button
+    // 4. Helper functions to locate Title and Description
+    function findTitleInput() {
+        let el = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
+        if (el) return el;
+        const candidates = document.querySelectorAll('label, div, span, p');
+        for (const node of candidates) {
+            const text = (node.textContent || '').trim();
+            if (/^title\\s*\\*?$/i.test(text)) {
+                const forId = node.getAttribute('for');
+                if (forId) {
+                    const target = document.getElementById(forId);
+                    if (target) return target;
+                }
+                const container = node.closest('.form-group, .form-row, div') || node.parentElement;
+                if (container) {
+                    const inp = container.querySelector('input[type="text"], input:not([type])');
+                    if (inp) return inp;
+                }
+            }
+        }
+        return null;
+    }
+
+    function findDescriptionInput() {
+        let el = document.querySelector('textarea[name="description"], textarea#description, textarea[name="media_description"], textarea#media_description, textarea[name="image_description"], textarea#image_description, textarea[name*="desc" i], textarea');
+        if (el) return el;
+        const candidates = document.querySelectorAll('label, div, span, p');
+        for (const node of candidates) {
+            const text = (node.textContent || '').trim();
+            if (/^description\\s*\\*?$/i.test(text)) {
+                const forId = node.getAttribute('for');
+                if (forId) {
+                    const target = document.getElementById(forId);
+                    if (target) return target;
+                }
+                const container = node.closest('.form-group, .form-row, div') || node.parentElement;
+                if (container) {
+                    const ta = container.querySelector('textarea, input[type="text"]');
+                    if (ta) return ta;
+                }
+            }
+        }
+        return null;
+    }
+
+    const titleEl = findTitleInput();
+    const descEl = findDescriptionInput();
+
+    const titleVal = titleEl ? (titleEl.value || titleEl.textContent || "").trim() : "";
+    const descVal = descEl ? (descEl.value || descEl.textContent || "").trim() : "";
+
+    // If edit form fields are present in DOM:
+    if (titleEl || descEl) {
+        // If Title or Description is missing/empty, click Next (Skip)
+        if (!titleVal || !descVal) {
+            const nextBtn = document.getElementById('js-next-submit') || 
+                            document.querySelector('a.popup-nav__btn--next, .popup-nav__btn--next');
+            if (nextBtn && nextBtn.offsetParent !== null && !nextBtn.classList.contains('disabled')) {
+                nextBtn.click();
+                return { 
+                    status: "skipped", 
+                    message: "Title or Description missing. Clicked Skip (Next) button.",
+                    titleMissing: !titleVal,
+                    descMissing: !descVal
+                };
+            }
+            return { status: "missing_meta_no_next", message: "Title or Description missing, but Next button unavailable." };
+        }
+    }
+
+    // 5. Both Title and Description are present -> Find the real submit button
     let btn = document.getElementById('submitbutton');
     if (!btn) {
         // Fallback for custom or varied submit buttons
@@ -64,7 +134,7 @@ CHECK_AND_SUBMIT_JS = '''() => {
 
 async def run_autosubmit():
     print("=" * 65)
-    print("   Dreamstime Auto-Submit (Accurate, Safe & Real-Time Verified)")
+    print("   Dreamstime Auto-Submit & Smart Skip (Real-Time Verified)")
     print("=" * 65)
     print("Connecting to Chrome on port 9222...")
 
@@ -81,6 +151,7 @@ async def run_autosubmit():
 
         page_states = {}
         total_confirmed_submitted = 0
+        total_skipped = 0
         last_global_status = ""
 
         while True:
@@ -96,7 +167,7 @@ async def run_autosubmit():
                             if page not in page_states:
                                 page_states[page] = {
                                     "current_file_id": None,
-                                    "clicked": False,
+                                    "last_action": None,  # "submitted" or "skipped"
                                     "last_action_time": 0.0,
                                     "attempts": 0
                                 }
@@ -128,22 +199,24 @@ async def run_autosubmit():
                     if file_id:
                         # New ID arrived on this page!
                         if file_id != state["current_file_id"]:
-                            # If we previously clicked submit for the old ID and the ID has now changed, that's a verified success!
-                            if state["current_file_id"] is not None and state["clicked"]:
+                            time_str = datetime.datetime.now().strftime("%H:%M:%S")
+                            if state["current_file_id"] is not None and state["last_action"] == "submitted":
                                 total_confirmed_submitted += 1
-                                time_str = datetime.datetime.now().strftime("%H:%M:%S")
                                 print(f"\n[{time_str}] [ID: {state['current_file_id']}] Successfully submitted! (Confirmed Total: {total_confirmed_submitted})")
+                            elif state["current_file_id"] is not None and state["last_action"] == "skipped":
+                                total_skipped += 1
+                                print(f"\n[{time_str}] [ID: {state['current_file_id']}] Skipped to next file. (Total Skipped: {total_skipped})")
 
                             state["current_file_id"] = file_id
-                            state["clicked"] = False
+                            state["last_action"] = None
                             state["last_action_time"] = 0.0
                             state["attempts"] = 0
                             last_global_status = ""
 
-                        # Decide if we need to click or check status:
-                        # - Not clicked yet (state["clicked"] == False)
-                        # - OR 6 seconds elapsed since click and still on the same ID (auto-retry)
-                        should_act = (not state["clicked"]) or (now - state["last_action_time"] >= 6.0)
+                        # Decide if we need to act:
+                        # - Not acted yet (state["last_action"] is None)
+                        # - OR 6 seconds elapsed since last action and still on the same ID (auto-retry)
+                        should_act = (state["last_action"] is None) or (now - state["last_action_time"] >= 6.0)
 
                         if should_act:
                             try:
@@ -155,16 +228,36 @@ async def run_autosubmit():
                                 res_status = result.get("status")
 
                                 if res_status == "clicked":
-                                    state["clicked"] = True
+                                    state["last_action"] = "submitted"
                                     state["last_action_time"] = now
                                     state["attempts"] += 1
                                     time_str = datetime.datetime.now().strftime("%H:%M:%S")
                                     btn_name = result.get("text", "Submit")
 
                                     if state["attempts"] == 1:
-                                        print(f"\n[{time_str}] [ID: {file_id}] Clicked '{btn_name}'. Processing submission...")
+                                        print(f"\n[{time_str}] [ID: {file_id}] Title & Description present. Clicked '{btn_name}'. Processing submission...")
                                     else:
                                         status = f"[{time_str}] [ID: {file_id}] Still on page. Retrying click (Attempt {state['attempts']})..."
+                                        if status != last_global_status:
+                                            print(f"{status:<65}", end="\r", flush=True)
+                                            last_global_status = status
+
+                                elif res_status == "skipped":
+                                    state["last_action"] = "skipped"
+                                    state["last_action_time"] = now
+                                    state["attempts"] += 1
+                                    time_str = datetime.datetime.now().strftime("%H:%M:%S")
+                                    t_miss = result.get("titleMissing", False)
+                                    d_miss = result.get("descMissing", False)
+                                    reason = []
+                                    if t_miss: reason.append("Title")
+                                    if d_miss: reason.append("Description")
+                                    reason_str = " & ".join(reason) if reason else "Title/Description"
+
+                                    if state["attempts"] == 1:
+                                        print(f"\n[{time_str}] [ID: {file_id}] ⏭ Missing {reason_str} -> Clicked Next (Skip) button.")
+                                    else:
+                                        status = f"[{time_str}] [ID: {file_id}] Waiting for next image after skip (Attempt {state['attempts']})..."
                                         if status != last_global_status:
                                             print(f"{status:<65}", end="\r", flush=True)
                                             last_global_status = status
@@ -184,15 +277,22 @@ async def run_autosubmit():
                                     state["last_action_time"] = now + 4.0
                                     last_global_status = ""
 
+                                elif res_status == "missing_meta_no_next":
+                                    state["last_action_time"] = now + 3.0
+                                    status = f"[{file_id}] Title/Description missing, but Next button not available."
+                                    if status != last_global_status:
+                                        print(f"{status:<65}", end="\r", flush=True)
+                                        last_global_status = status
+
                                 else:  # no_button
                                     state["last_action_time"] = now
-                                    status = f"[{file_id}] Waiting for Submit button..."
+                                    status = f"[{file_id}] Waiting for Submit or Next button..."
                                     if status != last_global_status:
                                         print(f"{status:<65}", end="\r", flush=True)
                                         last_global_status = status
                     else:
-                        if "unfinished" in url.lower() and total_confirmed_submitted > 0:
-                            status = f"All files completed! (Confirmed Total: {total_confirmed_submitted})"
+                        if "unfinished" in url.lower() and (total_confirmed_submitted > 0 or total_skipped > 0):
+                            status = f"All files completed! (Submitted: {total_confirmed_submitted}, Skipped: {total_skipped})"
                         else:
                             display_url = url[:45] if url else "loading..."
                             status = f"Waiting for edit page... ({display_url})"
