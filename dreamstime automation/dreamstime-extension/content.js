@@ -18,13 +18,13 @@ function updateStatusIndicator(customText, bgColor, textColor) {
     indicator.style.top = '15px';
     indicator.style.left = '15px';
     indicator.style.zIndex = '999999';
-    indicator.style.padding = '10px 15px';
-    indicator.style.borderRadius = '5px';
+    indicator.style.padding = '10px 16px';
+    indicator.style.borderRadius = '6px';
     indicator.style.fontWeight = 'bold';
     indicator.style.fontSize = '14px';
-    indicator.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
-    indicator.style.transition = '0.3s';
-    indicator.style.pointerEvents = 'none'; // Make sure it doesn't block clicks
+    indicator.style.boxShadow = '0 4px 12px rgba(0,0,0,0.35)';
+    indicator.style.transition = 'background-color 0.2s, color 0.2s';
+    indicator.style.pointerEvents = 'none';
     document.body.appendChild(indicator);
   }
 
@@ -100,53 +100,58 @@ function extractFileId() {
   return match ? match[1] : null;
 }
 
-function findTitleInput() {
-  let el = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
-  if (el) return el;
-  const candidates = document.querySelectorAll('label, div, span, p');
-  for (const node of candidates) {
-    const text = (node.textContent || '').trim();
-    if (/^title\s*\*?$/i.test(text)) {
-      const forId = node.getAttribute('for');
-      if (forId) {
-        const target = document.getElementById(forId);
-        if (target) return target;
-      }
-      const container = node.closest('.form-group, .form-row, div') || node.parentElement;
-      if (container) {
-        const inp = container.querySelector('input[type="text"], input:not([type])');
-        if (inp) return inp;
-      }
-    }
-  }
-  return null;
+function safeClick(el) {
+  if (!el) return;
+  try {
+    el.click();
+  } catch (e) {}
+  try {
+    const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+    el.dispatchEvent(evt);
+  } catch (e) {}
 }
 
-function findDescriptionInput() {
-  let el = document.querySelector('textarea[name="description"], textarea#description, textarea[name="media_description"], textarea#media_description, textarea[name="image_description"], textarea#image_description, textarea[name*="desc" i], textarea');
-  if (el) return el;
-  const candidates = document.querySelectorAll('label, div, span, p');
-  for (const node of candidates) {
-    const text = (node.textContent || '').trim();
-    if (/^description\s*\*?$/i.test(text)) {
-      const forId = node.getAttribute('for');
-      if (forId) {
-        const target = document.getElementById(forId);
-        if (target) return target;
-      }
-      const container = node.closest('.form-group, .form-row, div') || node.parentElement;
-      if (container) {
-        const ta = container.querySelector('textarea, input[type="text"]');
-        if (ta) return ta;
-      }
-    }
+function getFormData() {
+  // 1. All textareas and text inputs
+  const textareas = Array.from(document.querySelectorAll('textarea')).filter(t => t.offsetParent !== null);
+  const textInputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'))
+    .filter(i => i.offsetParent !== null && !i.closest('nav, header, #header, #navigation, .header, .search-bar, [role="navigation"]'));
+
+  // Description textarea
+  let descEl = document.querySelector('textarea[name*="desc" i], textarea#description, textarea#media_description, textarea#image_description');
+  if (!descEl && textareas.length > 0) {
+    descEl = textareas[0];
   }
-  return null;
+
+  // Title input
+  let titleEl = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
+  if (!titleEl && textInputs.length > 0) {
+    const byLabel = textInputs.find(inp => {
+      const prev = inp.previousElementSibling;
+      if (prev && /title/i.test(prev.textContent || '')) return true;
+      const parent = inp.parentElement;
+      if (parent && /title/i.test(parent.textContent || '')) return true;
+      return false;
+    });
+    titleEl = byLabel || textInputs[0];
+  }
+
+  const titleVal = titleEl ? (titleEl.value || '').trim() : '';
+  const descVal = descEl ? (descEl.value || '').trim() : '';
+
+  return { titleEl, descEl, titleVal, descVal };
 }
 
 function findNextSkipButton() {
-  return document.getElementById('js-next-submit') || 
-         document.querySelector('a.popup-nav__btn--next, .popup-nav__btn--next, a#js-next-submit');
+  let btn = document.getElementById('js-next-submit');
+  if (btn) return btn;
+  btn = document.querySelector('a.popup-nav__btn--next, .popup-nav__btn--next, [id="js-next-submit"]');
+  if (btn) return btn;
+  const allBtns = document.querySelectorAll('.popup-nav__btn, .popup-nav a, a');
+  for (const b of allBtns) {
+    if (b.classList.contains('popup-nav__btn--next') || b.id.includes('next')) return b;
+  }
+  return null;
 }
 
 function findSubmitButton() {
@@ -158,6 +163,8 @@ function findSubmitButton() {
   const allInputs = document.querySelectorAll('input[type="submit"], button, input[type="button"], a');
   const submitButtons = Array.from(allInputs).filter(el => {
     if (el.id === 'dreamstime-auto-submit-indicator') return false;
+    if (el.id === 'js-next-submit') return false;
+    if (el.classList.contains('popup-nav__btn--next')) return false;
     if (el.disabled) return false;
     if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
     if (el.closest('nav') || el.closest('header')) return false;
@@ -172,21 +179,19 @@ function findSubmitButton() {
 function checkAndSubmit() {
   if (!isRunning) return;
 
-  // 1. Check if page is currently loading next image
+  // 1. Check if page is currently loading or verifying submission
+  const bodyText = (document.body.innerText || '').toLowerCase();
   const ml = document.getElementById('js-mainloader');
-  if (ml && ml.dataset.state === 'loading') {
-    updateStatusIndicator("LOADING NEXT...", "#17a2b8");
+  const isMainLoader = ml && ml.dataset.state === 'loading';
+  const isVerifying = bodyText.includes("verifying data for submission") || bodyText.includes("please wait");
+  const isSubmitting = bodyText.includes("submitting image");
+
+  if (isMainLoader || isVerifying || isSubmitting) {
+    updateStatusIndicator("WAITING / VERIFYING...", "#17a2b8");
     return;
   }
 
-  // 2. Check if currently submitting / verifying
-  const sm = document.querySelector('#js-submit-message p');
-  if (sm && (sm.innerText || sm.textContent || '').trim()) {
-    updateStatusIndicator("SUBMITTING...", "#17a2b8");
-    return;
-  }
-
-  // 3. Track current File ID
+  // 2. Track current File ID
   const fileId = extractFileId();
   if (fileId && fileId !== currentFileId) {
     currentFileId = fileId;
@@ -194,45 +199,37 @@ function checkAndSubmit() {
     updateStatusIndicator("RUNNING", "#28a745");
   }
 
-  // 4. Check Title and Description inputs
-  const titleEl = findTitleInput();
-  const descEl = findDescriptionInput();
-  const titleVal = titleEl ? (titleEl.value || titleEl.textContent || "").trim() : "";
-  const descVal = descEl ? (descEl.value || descEl.textContent || "").trim() : "";
+  // 3. Check Title and Description
+  const { titleEl, descEl, titleVal, descVal } = getFormData();
+  const hasTitle = titleVal.length > 0;
+  const hasDesc = descVal.length > 0;
 
-  // If form fields exist in DOM:
-  if (titleEl || descEl) {
-    // If either Title or Description is missing -> Skip to next!
-    if (!titleVal || !descVal) {
-      const nextBtn = findNextSkipButton();
-      if (nextBtn && nextBtn.offsetParent !== null && !nextBtn.classList.contains('disabled')) {
-        if (noButtonTimer) {
-          clearTimeout(noButtonTimer);
-          noButtonTimer = null;
-        }
+  // 4. CRITICAL: IF TITLE OR DESCRIPTION IS MISSING -> MUST SKIP! NEVER SUBMIT!
+  if (!hasTitle || !hasDesc) {
+    const nextBtn = findNextSkipButton();
+    const reason = !hasTitle && !hasDesc ? "No Title & Desc" : (!hasTitle ? "No Title" : "No Desc");
 
-        if (Date.now() - lastActionTime > 2500) {
-          lastActionTime = Date.now();
-          lastActionType = 'skip';
-          updateStatusIndicator("SKIPPING (No Title/Desc)...", "#ffc107", "#000000");
-          console.log("[Dreamstime Auto Submit] Title or Description missing. Skipping to next image...");
-          try {
-            nextBtn.click();
-          } catch (e) {
-            const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-            nextBtn.dispatchEvent(evt);
-          }
-        }
-        return;
+    if (nextBtn && nextBtn.offsetParent !== null && !nextBtn.classList.contains('disabled')) {
+      if (Date.now() - lastActionTime > 2000) {
+        lastActionTime = Date.now();
+        lastActionType = 'skip';
+        updateStatusIndicator(`SKIPPING (${reason})...`, "#ffc107", "#000000");
+        console.log(`[Dreamstime Auto Submit] [ID: ${fileId || 'unknown'}] ${reason}. Clicking Next button (#js-next-submit)...`);
+        safeClick(nextBtn);
       }
+    } else {
+      updateStatusIndicator(`WAITING TO SKIP (${reason})...`, "#ffc107", "#000000");
+      console.log(`[Dreamstime Auto Submit] [ID: ${fileId || 'unknown'}] ${reason}, but Next button is not ready.`);
     }
+
+    // STRICT STOP: DO NOT PROCEED TO SUBMIT BUTTON!
+    return;
   }
 
-  // 5. Both Title & Description are present -> Find and click Submit button!
+  // 5. IF WE REACH HERE, BOTH TITLE AND DESCRIPTION ARE 100% FILLED!
   const btn = findSubmitButton();
 
   if (!btn) {
-    // If neither submit button nor next button is found
     const nextBtn = findNextSkipButton();
     if (!nextBtn) {
       if (!noButtonTimer) {
@@ -258,17 +255,12 @@ function checkAndSubmit() {
     }
   }
 
-  // Click submit button with debounce
-  if (Date.now() - lastActionTime > 2500) {
+  // Click Submit button with debounce
+  if (Date.now() - lastActionTime > 2000) {
     lastActionTime = Date.now();
     lastActionType = 'submit';
     updateStatusIndicator("SUBMITTING...", "#17a2b8");
-    console.log("[Dreamstime Auto Submit] Title & Description found. Submitting image...");
-    try {
-      btn.click();
-    } catch (e) {
-      const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-      btn.dispatchEvent(evt);
-    }
+    console.log(`[Dreamstime Auto Submit] [ID: ${fileId || 'unknown'}] Title ('${titleVal.slice(0, 20)}') & Description present. Submitting...`);
+    safeClick(btn);
   }
 }

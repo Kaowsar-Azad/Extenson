@@ -36,74 +36,53 @@ CHECK_AND_SUBMIT_JS = '''() => {
         return { status: "error", message: sf.innerText.trim() };
     }
 
-    // 4. Helper functions to locate Title and Description
-    function findTitleInput() {
-        let el = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
-        if (el) return el;
-        const candidates = document.querySelectorAll('label, div, span, p');
-        for (const node of candidates) {
-            const text = (node.textContent || '').trim();
-            if (/^title\\s*\\*?$/i.test(text)) {
-                const forId = node.getAttribute('for');
-                if (forId) {
-                    const target = document.getElementById(forId);
-                    if (target) return target;
-                }
-                const container = node.closest('.form-group, .form-row, div') || node.parentElement;
-                if (container) {
-                    const inp = container.querySelector('input[type="text"], input:not([type])');
-                    if (inp) return inp;
-                }
-            }
+    // 4. Infallible detection for Title and Description
+    function getFormData() {
+        const textareas = Array.from(document.querySelectorAll('textarea')).filter(t => t.offsetParent !== null);
+        const textInputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'))
+            .filter(i => i.offsetParent !== null && !i.closest('nav, header, #header, #navigation, .header, .search-bar, [role="navigation"]'));
+
+        let descEl = document.querySelector('textarea[name*="desc" i], textarea#description, textarea#media_description, textarea#image_description');
+        if (!descEl && textareas.length > 0) {
+            descEl = textareas[0];
         }
-        return null;
+
+        let titleEl = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
+        if (!titleEl && textInputs.length > 0) {
+            const byLabel = textInputs.find(inp => {
+                const prev = inp.previousElementSibling;
+                if (prev && /title/i.test(prev.textContent || '')) return true;
+                const parent = inp.parentElement;
+                if (parent && /title/i.test(parent.textContent || '')) return true;
+                return false;
+            });
+            titleEl = byLabel || textInputs[0];
+        }
+
+        const titleVal = titleEl ? (titleEl.value || '').trim() : '';
+        const descVal = descEl ? (descEl.value || '').trim() : '';
+
+        return { titleEl, descEl, titleVal, descVal };
     }
 
-    function findDescriptionInput() {
-        let el = document.querySelector('textarea[name="description"], textarea#description, textarea[name="media_description"], textarea#media_description, textarea[name="image_description"], textarea#image_description, textarea[name*="desc" i], textarea');
-        if (el) return el;
-        const candidates = document.querySelectorAll('label, div, span, p');
-        for (const node of candidates) {
-            const text = (node.textContent || '').trim();
-            if (/^description\\s*\\*?$/i.test(text)) {
-                const forId = node.getAttribute('for');
-                if (forId) {
-                    const target = document.getElementById(forId);
-                    if (target) return target;
-                }
-                const container = node.closest('.form-group, .form-row, div') || node.parentElement;
-                if (container) {
-                    const ta = container.querySelector('textarea, input[type="text"]');
-                    if (ta) return ta;
-                }
-            }
+    const { titleEl, descEl, titleVal, descVal } = getFormData();
+    const hasTitle = titleVal.length > 0;
+    const hasDesc = descVal.length > 0;
+
+    // IF EITHER TITLE OR DESCRIPTION IS EMPTY -> MUST SKIP, NEVER SUBMIT!
+    if (!hasTitle || !hasDesc) {
+        const nextBtn = document.getElementById('js-next-submit') || 
+                        document.querySelector('a.popup-nav__btn--next, .popup-nav__btn--next');
+        if (nextBtn && nextBtn.offsetParent !== null && !nextBtn.classList.contains('disabled')) {
+            try { nextBtn.click(); } catch(e) {}
+            return { 
+                status: "skipped", 
+                message: "Title or Description missing. Clicked Skip (Next) button.",
+                titleMissing: !hasTitle,
+                descMissing: !hasDesc
+            };
         }
-        return null;
-    }
-
-    const titleEl = findTitleInput();
-    const descEl = findDescriptionInput();
-
-    const titleVal = titleEl ? (titleEl.value || titleEl.textContent || "").trim() : "";
-    const descVal = descEl ? (descEl.value || descEl.textContent || "").trim() : "";
-
-    // If edit form fields are present in DOM:
-    if (titleEl || descEl) {
-        // If Title or Description is missing/empty, click Next (Skip)
-        if (!titleVal || !descVal) {
-            const nextBtn = document.getElementById('js-next-submit') || 
-                            document.querySelector('a.popup-nav__btn--next, .popup-nav__btn--next');
-            if (nextBtn && nextBtn.offsetParent !== null && !nextBtn.classList.contains('disabled')) {
-                nextBtn.click();
-                return { 
-                    status: "skipped", 
-                    message: "Title or Description missing. Clicked Skip (Next) button.",
-                    titleMissing: !titleVal,
-                    descMissing: !descVal
-                };
-            }
-            return { status: "missing_meta_no_next", message: "Title or Description missing, but Next button unavailable." };
-        }
+        return { status: "missing_meta_no_next", message: "Title or Description missing, but Next button unavailable." };
     }
 
     // 5. Both Title and Description are present -> Find the real submit button
