@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Image Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="app-header">
+    <div class="logo-group">
+      <img src="icons/icon48.png" alt="logo" class="app-icon">
+      <div>
+        <h1 class="main-title">Image Downloader</h1>
+        <span class="sub-title">High-Res Stock Photos</span>
+      </div>
+    </div>
+    <span id="siteBadge" class="badge badge-site">Detecting...</span>
+  </div>
+
+  <!-- Folder & Speed Settings -->
+  <div class="settings-card">
+    <div class="field-row">
+      <label for="folderInput">Save Folder:</label>
+      <input type="text" id="folderInput" placeholder="Folder name..." spellcheck="false">
+    </div>
+    <div class="field-row">
+      <label for="delaySelect">Speed / Delay:</label>
+      <select id="delaySelect">
+        <option value="150">Fast (150ms)</option>
+        <option value="300" selected>Balanced (300ms)</option>
+        <option value="600">Safe (600ms)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Stats & Selection Controls -->
+  <div class="toolbar">
+    <div class="stats-text">
+      Found: <strong id="totalCount">0</strong> | Selected: <strong id="selectedCount" class="highlight">0</strong>
+    </div>
+    <div class="toggle-buttons">
+      <button type="button" id="btnSelectAll" class="btn-text">All</button>
+      <button type="button" id="btnDeselectAll" class="btn-text">None</button>
+      <button type="button" id="btnScrollMore" class="btn-text btn-scroll" title="Scroll page down to load more images">+ More</button>
+    </div>
+  </div>
+
+  <!-- Main Action Buttons -->
+  <div class="actions-group">
+    <button type="button" id="btnDownloadBatch" class="btn btn-primary">
+      <span class="btn-icon">⚡</span> Download Files (<span id="batchBtnCount">0</span>)
+    </button>
+    <button type="button" id="btnDownloadZip" class="btn btn-zip">
+      <span class="btn-icon">📦</span> Download as ZIP
+    </button>
+    <button type="button" id="btnCancel" class="btn btn-danger" style="display: none;">
+      <span class="btn-icon">🛑</span> Stop Download
+    </button>
+  </div>
+
+  <!-- Live Progress Bar -->
+  <div id="progressSection" class="progress-container" style="display: none;">
+    <div class="progress-bar-bg">
+      <div id="progressBar" class="progress-bar-fill" style="width: 0%;"></div>
+    </div>
+    <div id="progressStatus" class="progress-status">Preparing download...</div>
+  </div>
+
+  <!-- Thumbnail Grid Preview -->
+  <div class="grid-header">
+    <span>Image Preview</span>
+    <span id="qualityNotice" class="badge badge-quality">Max Res (/b/ Previews)</span>
+  </div>
+  <div id="imageGrid" class="image-grid">
+    <div class="empty-state" id="emptyState">Scanning page for images...</div>
+  </div>
+
+  <script src="jszip.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
