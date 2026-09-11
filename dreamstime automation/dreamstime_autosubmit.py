@@ -36,36 +36,16 @@ CHECK_AND_SUBMIT_JS = '''() => {
         return { status: "error", message: sf.innerText.trim() };
     }
 
-    // 4. Infallible detection for Title and Description
+    // Confirmed from live DOM: Dreamstime uses exactly these IDs
     function getFormData() {
-        const textareas = Array.from(document.querySelectorAll('textarea')).filter(t => t.offsetParent !== null);
-        const textInputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'))
-            .filter(i => i.offsetParent !== null && !i.closest('nav, header, #header, #navigation, .header, .search-bar, [role="navigation"]'));
-
-        let descEl = document.querySelector('textarea[name*="desc" i], textarea#description, textarea#media_description, textarea#image_description');
-        if (!descEl && textareas.length > 0) {
-            descEl = textareas[0];
-        }
-
-        let titleEl = document.querySelector('input[name="title"], input#title, input[name="media_title"], input#media_title, input[name="image_title"], input#image_title, input[name*="title" i]');
-        if (!titleEl && textInputs.length > 0) {
-            const byLabel = textInputs.find(inp => {
-                const prev = inp.previousElementSibling;
-                if (prev && /title/i.test(prev.textContent || '')) return true;
-                const parent = inp.parentElement;
-                if (parent && /title/i.test(parent.textContent || '')) return true;
-                return false;
-            });
-            titleEl = byLabel || textInputs[0];
-        }
-
+        const titleEl = document.getElementById('title');
+        const descEl = document.getElementById('description');
         const titleVal = titleEl ? (titleEl.value || '').trim() : '';
         const descVal = descEl ? (descEl.value || '').trim() : '';
-
-        return { titleEl, descEl, titleVal, descVal };
+        return { titleVal, descVal };
     }
 
-    const { titleEl, descEl, titleVal, descVal } = getFormData();
+    const { titleVal, descVal } = getFormData();
     const hasTitle = titleVal.length > 0;
     const hasDesc = descVal.length > 0;
 
