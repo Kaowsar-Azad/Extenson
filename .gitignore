@@ -44,12 +44,16 @@ Thumbs.db
 Desktop.ini
 
 # IDEs and Editors
-.vscode/
 .idea/
 *.swp
 *.swo
 
 # Environment variables
-.env
-.env.local
 .env.*.local
+
+# Environment variables & secrets (added by GitHub Guardian)
+*.env
+!.env.example
+!.env.sample
+.envrc
+config.bat
