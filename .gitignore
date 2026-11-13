@@ -59,5 +59,3 @@ Desktop.ini
 config.bat
 
 # Environment variables & secrets (added by GitHub Guardian)
-.env
-.env.*
